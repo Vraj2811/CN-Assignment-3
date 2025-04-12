@@ -60,7 +60,7 @@ def run():
 
     print("\nTesting connectivity (each test runs 3 times with 30s interval):")
 
-    time.sleep(50)
+    time.sleep(30)
     for i in range(3):
         print(f"\n--- Test {i+1}/3: Ping h1 from h3 ---")
         print(h3.cmd('ping -c 4 10.0.0.2'))
