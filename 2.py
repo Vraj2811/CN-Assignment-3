@@ -26,7 +26,7 @@ class SimpleNATTopo(Topo):
         h6 = self.addHost('h6', ip='10.0.0.7/24')
         h7 = self.addHost('h7', ip='10.0.0.8/24')
         h8 = self.addHost('h8', ip='10.0.0.9/24')
-        h9 = self.addHost('h9', ip='172.16.10.10')  # NAT router
+        h9 = self.addHost('h9')  # NAT router
 
         # Internal links to NAT (h9)
         self.addLink(h1, h9, delay='5ms')
@@ -65,9 +65,6 @@ def run():
     h9.cmd('ip link set h9-eth0 master br0')  # link to h1
     h9.cmd('ip link set h9-eth1 master br0')  # link to h2
     h9.cmd('ip addr add 10.1.1.1/24 dev br0')  # internal gateway IP
-
-    # Set public-facing IP on h9's external interface (to h4's subnet)
-    h9.setIP('10.0.0.1/24', intf='h9-eth2')  # NAT's external interface
     
 
     # Set default routes for internal hosts
@@ -103,11 +100,66 @@ def run():
 
     # Set external IP
     h9.setIP('10.0.0.1/24', intf='h9-eth2')
+    h9.cmd('ip addr add 172.16.10.10/24 dev h9-eth2')
     
     print("Waiting 30 seconds for routes/NAT to settle...")
     time.sleep(30)
     
     net.pingAll()
+    
+    output_a = ""
+    output_b = ""
+    output_c = ""
+    
+    print("\nTesting connectivity (each test runs 3 times with 30s interval):")
+
+    print("a) Test communication to an external host from an internal host")
+
+    for i in range(3):
+        result = h1.cmd('ping -c 4 10.0.0.6')
+        output_a += f"\n--- Test {i+1}/3: Ping h5 from h1 ---\n{result}"
+    for i in range(3):
+        result = h2.cmd('ping -c 4 10.0.0.4')
+        output_a += f"\n--- Test {i+1}/3: Ping h3 from h2 ---\n{result}"
+
+    print("b) Test communication to an internal host from an external host")
+
+    for i in range(3):
+        result = h8.cmd('ping -c 4 10.1.1.2')
+        output_b += f"\n--- Test {i+1}/3: Ping h1 from h8 ---\n{result}"
+    for i in range(3):
+        result = h6.cmd('ping -c 4 10.1.1.3')
+        output_b += f"\n--- Test {i+1}/3: Ping h2 from h6 ---\n{result}"
+
+    print("c) Iperf tests: 3 tests of 120s each")
+
+    output_c += "\n--- iPerf3 Test: h6 client -> h1 server ---\n"
+    h1.cmd('iperf3 -s -D')  # Start iperf3 server
+    time.sleep(2)
+    for i in range(3):
+        result = h6.cmd('iperf3 -c 10.1.1.2 -t 120')
+        output_c += f"\n--- iPerf3 Test {i+1}/3: h6 -> h1 ---\n{result}"
+        time.sleep(5)
+    h1.cmd('pkill iperf3')
+
+    output_c += "\n--- iPerf3 Test: h2 client -> h8 server ---\n"
+    h8.cmd('iperf3 -s -D')
+    time.sleep(2)
+    for i in range(3):
+        result = h2.cmd('iperf3 -c 10.0.0.9 -t 120')
+        output_c += f"\n--- iPerf3 Test {i+1}/3: h2 -> h8 ---\n{result}"
+        time.sleep(5)
+    h8.cmd('pkill iperf3')
+
+    # Write outputs to files
+    with open("output_a.txt", "w") as f:
+        f.write(output_a)
+
+    with open("output_b.txt", "w") as f:
+        f.write(output_b)
+
+    with open("output_c.txt", "w") as f:
+        f.write(output_c)
     
     net.stop()
 

@@ -162,7 +162,6 @@ def run():
 
     with open("output_c.txt", "w") as f:
         f.write(output_c)
-
     
     # CLI(net)
     
